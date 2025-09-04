@@ -2,7 +2,7 @@ import { globalConfig } from '@/utils/config/config'
 import { CONTENT_WRAPPER_CLASS } from '@/utils/constants/dom-labels'
 import { isDontWalkIntoElement, isHTMLElement, isIFrameElement } from '@/utils/host/dom/filter'
 import { deepQueryTopLevelSelector } from '@/utils/host/dom/find'
-import { walkAndLabelElement } from '@/utils/host/dom/traversal'
+import { extractTextContent, walkAndLabelElement } from '@/utils/host/dom/traversal'
 import { removeAllTranslatedWrapperNodes, translateNodesInBatch, translateWalkedElement } from '@/utils/host/translate/node-manipulation'
 import { sendMessage } from '@/utils/message'
 
@@ -35,6 +35,7 @@ interface IPageTranslationManager {
 }
 
 export class PageTranslationManager implements IPageTranslationManager {
+  private static readonly CHARACTER_LIMIT = 5000
   private static readonly MAX_DURATION = 500
   private static readonly MOVE_THRESHOLD = 30 * 30
   private static readonly DEFAULT_INTERSECTION_OPTIONS: SimpleIntersectionOptions = {
@@ -360,13 +361,15 @@ export class PageTranslationManager implements IPageTranslationManager {
       if (isHTMLElement(child)) {
         this.observeIsolatedDescendantsMutations(child)
       }
+    }
+  }
 
   private addToTranslationQueue(element: HTMLElement) {
     this.translationQueue.push(element)
     if (this.translationTimer) {
       clearTimeout(this.translationTimer)
     }
-    const timeout = this.isInitialTranslation ? 0 : 2000
+    const timeout = this.isInitialTranslation ? 0 : 1000
     this.translationTimer = window.setTimeout(() => {
       this.processTranslationQueue()
     }, timeout)
@@ -377,15 +380,57 @@ export class PageTranslationManager implements IPageTranslationManager {
       return
     }
 
-    const nodesToTranslate = [...this.translationQueue]
-    this.translationQueue = []
+    const currentBatch: HTMLElement[] = []
+    let currentLength = 0
+    let consumedNodesCount = 0
 
-    translateNodesInBatch(nodesToTranslate, this.walkId, globalConfig.translate.mode)
+    for (const node of this.translationQueue) {
+      const text = extractTextContent(node)
+
+      // Handle oversized nodes: if a single node is too big, translate it alone.
+      if (text.length > PageTranslationManager.CHARACTER_LIMIT) {
+        if (currentBatch.length > 0) {
+          // Process the current batch first before handling the oversized node.
+          break
+        }
+        else {
+          // The oversized node is at the front. Process it alone.
+          currentBatch.push(node)
+          consumedNodesCount = 1
+          break
+        }
+      }
+
+      if (currentLength + text.length > PageTranslationManager.CHARACTER_LIMIT && currentBatch.length > 0) {
+        // Batch is full
+        break
+      }
+
+      currentBatch.push(node)
+      currentLength += text.length
+      consumedNodesCount++
+    }
+
+    // Remove the processed nodes from the main queue
+    this.translationQueue.splice(0, consumedNodesCount)
+
+    // Translate the current batch
+    if (currentBatch.length > 0) {
+      translateNodesInBatch(currentBatch, this.walkId, globalConfig.translate.mode)
+    }
+
+    // If there are still nodes left, schedule the next run.
+    if (this.translationQueue.length > 0) {
+      if (this.translationTimer)
+        clearTimeout(this.translationTimer)
+      this.translationTimer = window.setTimeout(() => this.processTranslationQueue(), 100)
+    }
 
     if (this.isInitialTranslation) {
-      this.isInitialTranslation = false
-    }
-  }
+      // Only set to false if the entire queue has been processed.
+      if (this.translationQueue.length === 0) {
+        this.isInitialTranslation = false
+      }
     }
   }
 }
