@@ -10,6 +10,66 @@ import { Sha256Hex } from '../../hash'
 import { sendMessage } from '../../message'
 import { getTranslatePrompt } from '../../prompts/translate'
 
+const BATCH_TRANSLATE_SEPARATOR = '\n<read-frog-separator>\n'
+
+export async function translateTexts(sourceTexts: string[]): Promise<string[]> {
+  if (!globalConfig) {
+    throw new Error('No global config when translate text')
+  }
+
+  const provider = globalConfig.translate.provider
+  const modelConfig = globalConfig.translate.models[provider]
+  if (!modelConfig && !isPureTranslateProvider(provider)) {
+    throw new Error(`No configuration found for provider: ${provider}`)
+  }
+  const modelString = modelConfig?.isCustomModel ? modelConfig.customModel : modelConfig?.model
+
+  const cleanSourceTexts = sourceTexts.map(text => text.replace(/\u200B/g, '').trim())
+  const combinedText = cleanSourceTexts.join(BATCH_TRANSLATE_SEPARATOR)
+
+  let translatedText = ''
+
+  if (isPureTranslateProvider(provider)) {
+    const sourceLang = globalConfig.language.sourceCode === 'auto' ? 'auto' : (ISO6393_TO_6391[globalConfig.language.sourceCode] ?? 'auto')
+    const targetLang = ISO6393_TO_6391[globalConfig.language.targetCode]
+    if (!targetLang) {
+      throw new Error('Invalid target language code')
+    }
+    // For pure translate providers, we can't do batch translation with a single API call in the same way.
+    // We will send multiple requests and combine the results.
+    const promises = cleanSourceTexts.map(text => sendMessage('enqueueRequest', {
+      type: `${provider}Translate`,
+      params: { text, fromLang: sourceLang, toLang: targetLang },
+      scheduleAt: Date.now(),
+      hash: Sha256Hex(text, provider, sourceLang, targetLang),
+    }))
+    const results = await Promise.all(promises)
+    return results.map(result => result.trim())
+  }
+  else if (modelString) {
+    const targetLang = LANG_CODE_TO_EN_NAME[globalConfig.language.targetCode]
+    if (!targetLang) {
+      throw new Error('Invalid target language code')
+    }
+    const prompt = getTranslatePrompt(targetLang, combinedText)
+    const text = await sendMessage('enqueueRequest', {
+      type: 'aiTranslate',
+      params: {
+        provider,
+        modelString,
+        prompt,
+      },
+      scheduleAt: Date.now(),
+      hash: Sha256Hex(combinedText, provider, modelString, targetLang, prompt),
+    })
+    const [, extracted = text] = text.match(/<\/think>([\s\S]*)/) || []
+    translatedText = extracted.trim()
+    return translatedText.split(BATCH_TRANSLATE_SEPARATOR.trim()).map(t => t.trim())
+  }
+
+  return []
+}
+
 export async function translateText(sourceText: string) {
   if (!globalConfig) {
     throw new Error('No global config when translate text')

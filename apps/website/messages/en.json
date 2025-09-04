@@ -144,5 +144,8 @@
     "hnj": "Hmong Njua",
     "ilo": "Iloko",
     "kaz": "Kazakh"
+  },
+  "popup": {
+    "mergeTranslation": "Merge Translation"
   }
 }

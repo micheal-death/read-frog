@@ -30,7 +30,7 @@ import {
   walkAndLabelElement,
 } from '../dom/traversal'
 import { decorateTranslationNode } from './decorate-translation'
-import { translateText, validateTranslationConfig } from './translate-text'
+import { translateText, translateTexts, validateTranslationConfig } from './translate-text'
 
 const translatingNodes = new WeakSet<ChildNode>()
 const originalContentMap = new Map<Element, string>()
@@ -499,4 +499,53 @@ export async function translateWalkedElement(
   // This simultaneously ensures that when concurrent translation
   // and external await call this function, all translations are completed
   await Promise.all(promises)
+}
+
+export async function translateNodesInBatch(nodes: HTMLElement[], walkId: string, translationMode: TranslationMode) {
+  if (nodes.some(node => translatingNodes.has(node))) {
+    return
+  }
+  nodes.forEach(node => translatingNodes.add(node))
+
+  try {
+    const texts = nodes.map(node => extractTextContent(node))
+    const translatedTexts = await translateTexts(texts)
+
+    if (translatedTexts.length !== nodes.length) {
+      console.error('Translated texts length does not match nodes length')
+      return
+    }
+
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i]
+      const translatedText = translatedTexts[i]
+
+      if (!translatedText) continue
+
+      const existedTranslatedWrapper = findPreviousTranslatedWrapper(node, walkId)
+      if (existedTranslatedWrapper) {
+        removeTranslatedWrapperWithRestore(existedTranslatedWrapper)
+      }
+
+      const ownerDoc = getOwnerDocument(node)
+      const translatedWrapperNode = ownerDoc.createElement('span')
+      translatedWrapperNode.className = `${NOTRANSLATE_CLASS} ${CONTENT_WRAPPER_CLASS}`
+      translatedWrapperNode.setAttribute(TRANSLATION_MODE_ATTRIBUTE, translationMode)
+      translatedWrapperNode.setAttribute(WALKED_ATTRIBUTE, walkId)
+
+      if (isBlockTransNode(node)) {
+        node.appendChild(translatedWrapperNode)
+      } else {
+        node.parentNode?.insertBefore(translatedWrapperNode, node.nextSibling)
+      }
+
+      insertTranslatedNodeIntoWrapper(
+        translatedWrapperNode,
+        node,
+        translatedText,
+      )
+    }
+  } finally {
+    nodes.forEach(node => translatingNodes.delete(node))
+  }
 }

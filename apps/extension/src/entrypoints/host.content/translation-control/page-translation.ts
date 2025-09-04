@@ -3,7 +3,7 @@ import { CONTENT_WRAPPER_CLASS } from '@/utils/constants/dom-labels'
 import { isDontWalkIntoElement, isHTMLElement, isIFrameElement } from '@/utils/host/dom/filter'
 import { deepQueryTopLevelSelector } from '@/utils/host/dom/find'
 import { walkAndLabelElement } from '@/utils/host/dom/traversal'
-import { removeAllTranslatedWrapperNodes, translateWalkedElement } from '@/utils/host/translate/node-manipulation'
+import { removeAllTranslatedWrapperNodes, translateNodesInBatch, translateWalkedElement } from '@/utils/host/translate/node-manipulation'
 import { sendMessage } from '@/utils/message'
 
 type SimpleIntersectionOptions = Omit<IntersectionObserverInit, 'threshold'> & {
@@ -49,6 +49,9 @@ export class PageTranslationManager implements IPageTranslationManager {
   private walkId: string | null = null
   private intersectionOptions: IntersectionObserverInit
   private dontWalkIntoElementsCache = new WeakSet<HTMLElement>()
+  private translationQueue: HTMLElement[] = []
+  private translationTimer: number | null = null
+  private isInitialTranslation: boolean = false
 
   constructor(intersectionOptions: SimpleIntersectionOptions = {}) {
     if (intersectionOptions.threshold !== undefined) {
@@ -79,6 +82,7 @@ export class PageTranslationManager implements IPageTranslationManager {
     }
 
     this.isAutoTranslating = true
+    this.isInitialTranslation = true
     sendMessage('setEnablePageTranslationOnContentScript', {
       enabled: true,
     })
@@ -95,7 +99,11 @@ export class PageTranslationManager implements IPageTranslationManager {
               return
             }
             if (!entry.target.closest(`.${CONTENT_WRAPPER_CLASS}`)) {
-              translateWalkedElement(entry.target, walkId, globalConfig.translate.mode)
+              if (globalConfig.translate.mergeTranslation) {
+                this.addToTranslationQueue(entry.target)
+              } else {
+                translateWalkedElement(entry.target, walkId, globalConfig.translate.mode)
+              }
             }
           }
           observer.unobserve(entry.target)
@@ -118,6 +126,7 @@ export class PageTranslationManager implements IPageTranslationManager {
     }
 
     this.isAutoTranslating = false
+    this.isInitialTranslation = false
     this.walkId = null
     this.dontWalkIntoElementsCache = new WeakSet()
 
@@ -351,6 +360,32 @@ export class PageTranslationManager implements IPageTranslationManager {
       if (isHTMLElement(child)) {
         this.observeIsolatedDescendantsMutations(child)
       }
+
+  private addToTranslationQueue(element: HTMLElement) {
+    this.translationQueue.push(element)
+    if (this.translationTimer) {
+      clearTimeout(this.translationTimer)
+    }
+    const timeout = this.isInitialTranslation ? 0 : 2000
+    this.translationTimer = window.setTimeout(() => {
+      this.processTranslationQueue()
+    }, timeout)
+  }
+
+  private processTranslationQueue() {
+    if (this.translationQueue.length === 0 || !this.walkId || !globalConfig) {
+      return
+    }
+
+    const nodesToTranslate = [...this.translationQueue]
+    this.translationQueue = []
+
+    translateNodesInBatch(nodesToTranslate, this.walkId, globalConfig.translate.mode)
+
+    if (this.isInitialTranslation) {
+      this.isInitialTranslation = false
+    }
+  }
     }
   }
 }

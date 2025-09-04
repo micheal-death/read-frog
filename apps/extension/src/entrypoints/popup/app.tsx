@@ -8,6 +8,7 @@ import { UserAccount } from '@/components/user-account'
 import { version } from '../../../package.json'
 import { initIsIgnoreTabAtom } from './atoms/ignore'
 import { AlwaysTranslate } from './components/always-translate'
+import { MergeTranslation } from './components/merge-translation'
 import FloatingButton from './components/floating-button'
 import Hotkey from './components/hotkey-selector'
 import LanguageOptionsSelector from './components/language-options-selector'
@@ -40,6 +41,7 @@ function App() {
           <TranslateButton />
         </div>
         <AlwaysTranslate />
+        <MergeTranslation />
         <Hotkey />
         <FloatingButton />
         <SelectionToolbar />

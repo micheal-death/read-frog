@@ -144,5 +144,8 @@
     "hnj": "苗族北部语",
     "ilo": "伊洛卡诺语",
     "kaz": "哈萨克语"
+  },
+  "popup": {
+    "mergeTranslation": "合并翻译"
   }
 }

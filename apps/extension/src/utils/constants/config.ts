@@ -105,6 +105,7 @@ export const DEFAULT_CONFIG: Config = {
     },
     translationNodeStyle: DEFAULT_TRANSLATION_NODE_STYLE,
     customAutoTranslateShortcutKey: DEFAULT_AUTO_TRANSLATE_SHORTCUT_KEY,
+    mergeTranslation: false,
   },
   floatingButton: {
     enabled: true,

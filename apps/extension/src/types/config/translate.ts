@@ -27,6 +27,7 @@ export const translateConfigSchema = z.object({
   requestQueueConfig: requestQueueConfigSchema,
   translationNodeStyle: translationNodeStyleSchema,
   customAutoTranslateShortcutKey: z.array(z.string()),
+  mergeTranslation: z.boolean(),
 })
 
 export type RequestQueueConfig = z.infer<typeof requestQueueConfigSchema>
