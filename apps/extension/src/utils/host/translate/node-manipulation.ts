@@ -507,21 +507,11 @@ export async function translateNodesInBatch(nodes: HTMLElement[], walkId: string
   }
   nodes.forEach(node => translatingNodes.add(node))
 
+  const nodeToWrapperMap = new Map<HTMLElement, HTMLElement>()
+
   try {
-    const texts = nodes.map(node => extractTextContent(node))
-    const translatedTexts = await translateTexts(texts)
-
-    if (translatedTexts.length !== nodes.length) {
-      console.error('Translated texts length does not match nodes length')
-      return
-    }
-
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i]
-      const translatedText = translatedTexts[i]
-
-      if (!translatedText) continue
-
+    // First, create and show spinners for all nodes.
+    for (const node of nodes) {
       const existedTranslatedWrapper = findPreviousTranslatedWrapper(node, walkId)
       if (existedTranslatedWrapper) {
         removeTranslatedWrapperWithRestore(existedTranslatedWrapper)
@@ -533,19 +523,56 @@ export async function translateNodesInBatch(nodes: HTMLElement[], walkId: string
       translatedWrapperNode.setAttribute(TRANSLATION_MODE_ATTRIBUTE, translationMode)
       translatedWrapperNode.setAttribute(WALKED_ATTRIBUTE, walkId)
 
+      createSpinnerInside(translatedWrapperNode)
+
       if (isBlockTransNode(node)) {
         node.appendChild(translatedWrapperNode)
-      } else {
+      }
+      else {
         node.parentNode?.insertBefore(translatedWrapperNode, node.nextSibling)
       }
-
-      insertTranslatedNodeIntoWrapper(
-        translatedWrapperNode,
-        node,
-        translatedText,
-      )
+      nodeToWrapperMap.set(node, translatedWrapperNode)
     }
-  } finally {
+
+    const texts = nodes.map(node => extractTextContent(node))
+    const translatedTexts = await translateTexts(texts)
+
+    if (translatedTexts.length !== nodes.length) {
+      console.error('Translated texts length does not match nodes length')
+      // Clean up spinners if translation fails
+      for (const wrapper of nodeToWrapperMap.values()) {
+        wrapper.remove()
+      }
+      return
+    }
+
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i]
+      const translatedText = translatedTexts[i]
+      const translatedWrapperNode = nodeToWrapperMap.get(node)
+
+      if (!translatedWrapperNode) continue
+
+      // Remove the spinner from the wrapper.
+      const spinner = translatedWrapperNode.querySelector(`.${REACT_SHADOW_HOST_CLASS}`)
+      if (spinner) {
+        removeReactShadowHost(spinner as HTMLElement)
+      }
+
+      if (translatedText) {
+        insertTranslatedNodeIntoWrapper(
+          translatedWrapperNode,
+          node,
+          translatedText,
+        )
+      }
+      else {
+        // If there's no translation, remove the empty wrapper.
+        translatedWrapperNode.remove()
+      }
+    }
+  }
+  finally {
     nodes.forEach(node => translatingNodes.delete(node))
   }
 }
