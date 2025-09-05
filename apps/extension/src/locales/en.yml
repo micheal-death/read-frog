@@ -12,6 +12,7 @@ popup:
   disableFloatingButtonOnSite: Disable floating button on this site
   enabledSelectionToolbar: Enable selection toolbar
   alwaysTranslate: Always translate this site
+  mergeTranslation: Merge Translation
   options: Options
   hover: Hover
   translateParagraph: to translate paragraph

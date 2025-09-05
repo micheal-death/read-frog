@@ -8,7 +8,7 @@ import { logger } from '@/utils/logger'
 import { globalConfig, hasSetAPIKey } from '../../config/config'
 import { Sha256Hex } from '../../hash'
 import { sendMessage } from '../../message'
-import { getTranslatePrompt } from '../../prompts/translate'
+import { getBatchTranslatePrompt, getTranslatePrompt } from '../../prompts/translate'
 
 const BATCH_TRANSLATE_SEPARATOR = '\n<read-frog-separator>\n'
 
@@ -51,7 +51,7 @@ export async function translateTexts(sourceTexts: string[]): Promise<string[]> {
     if (!targetLang) {
       throw new Error('Invalid target language code')
     }
-    const prompt = getTranslatePrompt(targetLang, combinedText)
+    const prompt = getBatchTranslatePrompt(targetLang, combinedText)
     const text = await sendMessage('enqueueRequest', {
       type: 'aiTranslate',
       params: {
