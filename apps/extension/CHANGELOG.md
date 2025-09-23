@@ -1,5 +1,11 @@
 # @read-frog/extension
 
+## 1.10.6
+
+### Patch Changes
+
+- [#521](https://github.com/mengxi-ream/read-frog/pull/521) [`1234914`](https://github.com/mengxi-ream/read-frog/commit/1234914daa19e3758648fd818d31590de01351d3) Thanks [@mengxi-ream](https://github.com/mengxi-ream)! - fix(extension): replace guest avatar PNG with SVG and add padding
+
 ## 1.10.5
 
 ### Patch Changes
